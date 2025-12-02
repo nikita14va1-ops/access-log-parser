@@ -13,15 +13,8 @@ public class Main {
             String path = scanner.nextLine();
 
             File file = new File(path);
-            boolean fileExists = file.exists();
-            boolean isDirectory = file.isDirectory();
-
-            if (!fileExists || isDirectory) {
-                if (!fileExists) {
-                    System.out.println("Файл не существует.");
-                } else {
-                    System.out.println("Указанный путь ведёт к папке, а не к файлу.");
-                }
+            if (!file.exists() || file.isDirectory()) {
+                System.out.println(!file.exists() ? "Файл не существует." : "Указанный путь ведёт к папке.");
                 continue;
             }
 
@@ -30,68 +23,31 @@ public class Main {
             System.out.println("Это файл номер " + correctFileCount);
 
             try {
-                FileReader fileReader = new FileReader(path);
-                BufferedReader reader = new BufferedReader(fileReader);
-
-                int totalRequests = 0;
-                int yandexBotCount = 0;
-                int googleBotCount = 0;
-
+                Statistics stats = new Statistics();
+                BufferedReader reader = new BufferedReader(new FileReader(path));
                 String line;
+                int parsedCount = 0;
+
                 while ((line = reader.readLine()) != null) {
                     if (line.length() > 1024) {
                         reader.close();
                         throw new RuntimeException("Обнаружена строка длиннее 1024 символов (длина: " + line.length() + ")");
                     }
 
-
-                    int lastQuote = line.lastIndexOf('"');
-                    int secondLastQuote = line.lastIndexOf('"', lastQuote - 1);
-
-                    if (secondLastQuote == -1 || lastQuote <= secondLastQuote) {
-                        totalRequests++;
+                    try {
+                        LogEntry entry = new LogEntry(line);
+                        stats.addEntry(entry);
+                        parsedCount++;
+                    } catch (Exception e) {
+                        // Пропускаем некорректные строки
                         continue;
                     }
-
-                    String userAgent = line.substring(secondLastQuote + 1, lastQuote);
-
-
-                    int openParen = userAgent.indexOf('(');
-                    int closeParen = userAgent.indexOf(')', openParen);
-                    if (openParen == -1 || closeParen == -1) {
-                        totalRequests++;
-                        continue;
-                    }
-
-                    String firstBrackets = userAgent.substring(openParen + 1, closeParen);
-                    String[] parts = firstBrackets.split(";", -1);
-
-                    if (parts.length >= 2) {
-                        String fragment = parts[1].trim();
-                        if (!fragment.isEmpty()) {
-                            int slashIndex = fragment.indexOf('/');
-                            String botName = (slashIndex != -1) ? fragment.substring(0, slashIndex) : fragment;
-
-                            if ("YandexBot".equals(botName)) {
-                                yandexBotCount++;
-                            } else if ("Googlebot".equals(botName)) {
-                                googleBotCount++;
-                            }
-                        }
-                    }
-
-                    totalRequests++;
                 }
-
                 reader.close();
 
-                double yandexRatio = totalRequests > 0 ? (double) yandexBotCount / totalRequests : 0.0;
-                double googleRatio = totalRequests > 0 ? (double) googleBotCount / totalRequests : 0.0;
-
-                System.out.printf("Доля запросов от YandexBot: %.2f%% (%d из %d)%n",
-                        yandexRatio * 100, yandexBotCount, totalRequests);
-                System.out.printf("Доля запросов от Googlebot: %.2f%% (%d из %d)%n",
-                        googleRatio * 100, googleBotCount, totalRequests);
+                System.out.println("Успешно обработано строк: " + parsedCount);
+                double trafficRate = stats.getTrafficRate();
+                System.out.printf("Средний объём трафика за час: %.2f байт/час%n", trafficRate);
 
             } catch (Exception ex) {
                 ex.printStackTrace();
