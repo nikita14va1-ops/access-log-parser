@@ -33,34 +33,65 @@ public class Main {
                 FileReader fileReader = new FileReader(path);
                 BufferedReader reader = new BufferedReader(fileReader);
 
-                int totalLines = 0;
-                int maxLength = 0;
-                int minLength = Integer.MAX_VALUE;
+                int totalRequests = 0;
+                int yandexBotCount = 0;
+                int googleBotCount = 0;
+
                 String line;
-
                 while ((line = reader.readLine()) != null) {
-                    int length = line.length();
-
-
-                    if (length > 1024) {
-                        throw new RuntimeException("Обнаружена строка длиннее 1024 символов (длина: " + length + ")");
+                    if (line.length() > 1024) {
+                        reader.close();
+                        throw new RuntimeException("Обнаружена строка длиннее 1024 символов (длина: " + line.length() + ")");
                     }
 
-                    totalLines++;
-                    maxLength = Math.max(maxLength, length);
-                    minLength = Math.min(minLength, length);
+
+                    int lastQuote = line.lastIndexOf('"');
+                    int secondLastQuote = line.lastIndexOf('"', lastQuote - 1);
+
+                    if (secondLastQuote == -1 || lastQuote <= secondLastQuote) {
+                        totalRequests++;
+                        continue;
+                    }
+
+                    String userAgent = line.substring(secondLastQuote + 1, lastQuote);
+
+
+                    int openParen = userAgent.indexOf('(');
+                    int closeParen = userAgent.indexOf(')', openParen);
+                    if (openParen == -1 || closeParen == -1) {
+                        totalRequests++;
+                        continue;
+                    }
+
+                    String firstBrackets = userAgent.substring(openParen + 1, closeParen);
+                    String[] parts = firstBrackets.split(";", -1);
+
+                    if (parts.length >= 2) {
+                        String fragment = parts[1].trim();
+                        if (!fragment.isEmpty()) {
+                            int slashIndex = fragment.indexOf('/');
+                            String botName = (slashIndex != -1) ? fragment.substring(0, slashIndex) : fragment;
+
+                            if ("YandexBot".equals(botName)) {
+                                yandexBotCount++;
+                            } else if ("Googlebot".equals(botName)) {
+                                googleBotCount++;
+                            }
+                        }
+                    }
+
+                    totalRequests++;
                 }
 
                 reader.close();
 
-                if (totalLines == 0) {
-                    System.out.println("Файл пустой");
-                    minLength = 0;
-                }
+                double yandexRatio = totalRequests > 0 ? (double) yandexBotCount / totalRequests : 0.0;
+                double googleRatio = totalRequests > 0 ? (double) googleBotCount / totalRequests : 0.0;
 
-                System.out.println("Общее количество строк в файле: " + totalLines);
-                System.out.println("Длина самой длинной строки: " + maxLength);
-                System.out.println("Длина самой короткой строки: " + minLength);
+                System.out.printf("Доля запросов от YandexBot: %.2f%% (%d из %d)%n",
+                        yandexRatio * 100, yandexBotCount, totalRequests);
+                System.out.printf("Доля запросов от Googlebot: %.2f%% (%d из %d)%n",
+                        googleRatio * 100, googleBotCount, totalRequests);
 
             } catch (Exception ex) {
                 ex.printStackTrace();
